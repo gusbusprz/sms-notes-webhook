@@ -39,6 +39,27 @@ Pushing to `main` deploys automatically via Cloudflare Workers Builds.
     npm install
     npm run dev
 
+## Troubleshooting
+
+Signature failures log a `SIGNATURE_FAILED` entry to Cloudflare (Worker →
+Observability) with the URL used, whether the auth token is set and its length,
+and the computed vs received signature. No secret values are logged. The public
+403 response stays a bare "Forbidden".
+
+Things that have actually gone wrong here before:
+
+- **Secrets set in the wrong place.** Cloudflare's *Build* variables are not the
+  same as the Worker's *Variables and Secrets*. Only the latter reach `env` at
+  runtime. Setting them with `npx wrangler secret put NAME` avoids the ambiguity
+  entirely. Verify with `npx wrangler secret list`.
+- **Account SID pasted as the auth token.** The SID is 34 chars starting `AC`
+  and is displayed in plain text; the Auth Token is 32 hex chars and is hidden
+  behind a reveal toggle. Every signature fails if you grab the wrong one.
+- **A Messaging Service hijacking inbound routing.** If the number belongs to a
+  Messaging Service whose inbound setting is "Send a webhook", that URL wins and
+  the number's own webhook is ignored silently. Set the service to "Defer to
+  sender's webhook", or point the service itself at this Worker. Not both.
+
 ## Checking a deploy
 
 A plain GET returns a health check, so you can confirm the Worker is live before

@@ -69,33 +69,7 @@ export default {
             paramKeys: Object.keys(params).sort(),
           })
       );
-      // TEMPORARY DIAGNOSTIC MODE.
-      // Returns the failure detail in the response body so it shows up in the
-      // Twilio Request Inspector without needing Cloudflare logs. Contains no
-      // secret values: an HMAC output cannot be reversed into its key, and the
-      // auth token is reported only by length. Remove this block once the
-      // signature is verified working (see README).
-      return new Response(
-        JSON.stringify(
-          {
-            error: 'signature_validation_failed',
-            urlUsed,
-            rawRequestUrl: request.url,
-            publicUrlOverrideSet: Boolean(env.PUBLIC_URL),
-            authTokenPresent: Boolean(env.TWILIO_AUTH_TOKEN),
-            authTokenLength: (env.TWILIO_AUTH_TOKEN || '').length,
-            airtableTokenPresent: Boolean(env.AIRTABLE_TOKEN),
-            airtableBaseIdPresent: Boolean(env.AIRTABLE_BASE_ID),
-            signatureHeaderPresent: Boolean(signature),
-            receivedSignature: signature,
-            computedSignature: check.expected,
-            paramKeys: Object.keys(params).sort(),
-          },
-          null,
-          2
-        ),
-        { status: 403, headers: { 'content-type': 'application/json' } }
-      );
+      return new Response('Forbidden', { status: 403 });
     }
 
     // Twilio always sends Body, but it can be an empty string (for example a

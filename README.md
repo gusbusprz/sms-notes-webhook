@@ -15,6 +15,28 @@ Twilio SMS -> Cloudflare Worker -> Airtable REST API -> Airtable Kanban board.
 | `GET /api/notes` | List notes (session required) |
 | `PATCH /api/notes/:id` | Update a note's Status or Message (session required) |
 
+## Statuses
+
+All four live in `src/config.js` and nowhere else. They must match the Airtable
+single-select options **exactly**, capitalisation included: it is `In progress`,
+not `In Progress`.
+
+    Uncategorized  ->  To Do  ->  In progress  ->  Done
+
+Inbound texts land in **Uncategorized**. Moving one to To Do is a deliberate act
+of triage, so raw captured thoughts never silently become a work queue.
+
+Two protections mean an Airtable schema change cannot cost you a note:
+
+- Reads normalise case, so `in PROGRESS` maps to `In progress` and an unknown or
+  missing value becomes `Uncategorized` rather than erroring.
+- If an inbound write is rejected because the Status option was renamed or
+  removed, the Worker immediately retries **without** Status and logs
+  `AIRTABLE_FALLBACK`. The note is saved with a blank Status instead of lost.
+  Twilio never retries an inbound SMS, so a failed write is permanent.
+
+To change your workflow, edit `src/config.js` and the Airtable field together.
+
 ## The board
 
 A dark, Harmony-branded Kanban served straight from the Worker, so the Airtable

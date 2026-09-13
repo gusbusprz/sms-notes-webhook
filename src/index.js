@@ -17,10 +17,10 @@
  */
 
 import { BOARD_HTML } from './board.js';
+import { STATUSES, INBOX_STATUS, normalizeStatus } from './config.js';
 
 const TABLE_ID = 'tblzxRcl6C4OuZbmd';
 const AIRTABLE_API = 'https://api.airtable.com/v0';
-const STATUSES = ['To Do', 'In Progress', 'Done'];
 const SESSION_DAYS = 30;
 const COOKIE = 'harmony_notes_session';
 
@@ -110,17 +110,26 @@ async function handleTwilio(request, env) {
   const body = (params.Body || '').trim();
   const fields = {
     Message: body.length > 0 ? body : '(empty message)',
-    Status: 'To Do',
+    Status: INBOX_STATUS,
   };
   if (params.From) fields.From = params.From;
 
   try {
     await airtable(env, 'POST', '', { fields, typecast: true });
   } catch (err) {
-    // 500 rather than a fake success, so a dropped note shows up red in the
-    // Twilio debugger instead of vanishing. Twilio does not retry inbound SMS.
     console.error('AIRTABLE_FAILED ' + err.message);
-    return text('Airtable write failed', 500);
+    // A note arriving matters more than which column it lands in. If the write
+    // failed because the Status option was renamed or removed in Airtable, save
+    // it again without Status rather than losing it: Twilio never retries an
+    // inbound SMS, so a 500 here means that note is gone for good.
+    try {
+      const { Status, ...withoutStatus } = fields;
+      await airtable(env, 'POST', '', { fields: withoutStatus, typecast: true });
+      console.warn('AIRTABLE_FALLBACK note saved without Status; check Status options match src/config.js');
+    } catch (err2) {
+      console.error('AIRTABLE_FALLBACK_FAILED ' + err2.message);
+      return text('Airtable write failed', 500);
+    }
   }
 
   return new Response(TWIML_OK, { headers: { 'content-type': 'text/xml; charset=utf-8' } });
@@ -204,7 +213,7 @@ async function listNotes(env) {
     const notes = (data.records || []).map((r) => ({
       id: r.id,
       message: r.fields.Message || '(empty message)',
-      status: STATUSES.includes(r.fields.Status) ? r.fields.Status : 'To Do',
+      status: normalizeStatus(r.fields.Status),
       receivedAt: r.fields['Received At'] || r.createdTime,
       from: r.fields.From || '',
     }));

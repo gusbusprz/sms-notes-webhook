@@ -10,14 +10,22 @@ const env = {
 };
 
 let captured = [];
+let rejectStatusWrites = false;
 globalThis.fetch = async (url, opts = {}) => {
   captured.push({ url: String(url), method: opts.method, body: opts.body });
+  if (rejectStatusWrites && opts.body && JSON.parse(opts.body).fields?.Status) {
+    return new Response(JSON.stringify({ error: { type: 'INVALID_MULTIPLE_CHOICE_OPTIONS' } }), { status: 422 });
+  }
   if (opts.method === 'GET' || !opts.method) {
     return new Response(JSON.stringify({ records: [
       { id: 'recAAAAAAAAAAAAAA', createdTime: '2026-09-13T12:00:00.000Z',
         fields: { Message: 'Do laundry', Status: 'To Do', 'Received At': '2026-09-13T12:00:00.000Z', From: '+14058816768' } },
       { id: 'recBBBBBBBBBBBBBB', createdTime: '2026-09-12T09:00:00.000Z',
         fields: { Message: 'Call Mike', Status: 'Done', 'Received At': '2026-09-12T09:00:00.000Z' } },
+      { id: 'recCCCCCCCCCCCCCC', createdTime: '2026-09-11T09:00:00.000Z',
+        fields: { Message: 'Odd casing', Status: 'in PROGRESS', 'Received At': '2026-09-11T09:00:00.000Z' } },
+      { id: 'recDDDDDDDDDDDDDD', createdTime: '2026-09-10T09:00:00.000Z',
+        fields: { Message: 'No status at all', 'Received At': '2026-09-10T09:00:00.000Z' } },
     ] }), { headers: { 'content-type': 'application/json' } });
   }
   return new Response(JSON.stringify({ id: 'recAAAAAAAAAAAAAA' }), { headers: { 'content-type': 'application/json' } });
@@ -63,7 +71,7 @@ check('valid signature accepted', r.status === 200, 'status ' + r.status);
 check('returns TwiML', xml.includes('<Response></Response>'));
 check('wrote one Airtable record', captured.length === 1, JSON.stringify(captured.length));
 let sent = captured[0] ? JSON.parse(captured[0].body) : {};
-check('Status is To Do', sent.fields?.Status === 'To Do');
+check('inbound lands in Uncategorized', sent.fields?.Status === 'Uncategorized', JSON.stringify(sent.fields?.Status));
 check('Message preserved', sent.fields?.Message === 'Do laundry');
 check('From preserved', sent.fields?.From === '+14058816768');
 check('no timestamp sent (Airtable stamps it)', !('Received At' in (sent.fields || {})));
@@ -103,16 +111,18 @@ check('cookie is HttpOnly + Secure + SameSite', /HttpOnly/.test(r.headers.get('s
 const withCookie = { headers: { cookie } };
 r = await call('/api/notes', withCookie);
 let data = await r.json();
-check('notes load with session', r.status === 200 && data.notes.length === 2);
+check('notes load with session', r.status === 200 && data.notes.length === 4, 'got ' + data.notes.length);
 check('notes mapped correctly', data.notes[0].message === 'Do laundry' && data.notes[0].status === 'To Do');
 check('missing From tolerated', data.notes[1].from === '');
+check('odd casing normalised to In progress', data.notes[2].status === 'In progress', data.notes[2].status);
+check('missing status becomes Uncategorized', data.notes[3].status === 'Uncategorized', data.notes[3].status);
 
 r = await call('/api/notes', { headers: { cookie: 'harmony_notes_session=9999999999999.tampered' } });
 check('forged cookie rejected', r.status === 401);
 
 console.log('\n== updates ==');
 r = await call('/api/notes/recAAAAAAAAAAAAAA', { method: 'PATCH', ...withCookie,
-      body: JSON.stringify({ Status: 'In Progress' }) });
+      body: JSON.stringify({ Status: 'In progress' }) });
 check('valid status change accepted', r.status === 200);
 
 r = await call('/api/notes/recAAAAAAAAAAAAAA', { method: 'PATCH', ...withCookie,
@@ -137,6 +147,18 @@ check('only allow-listed fields forwarded',
 r = await call('/api/notes/recAAAAAAAAAAAAAA', { method: 'PATCH',
       body: JSON.stringify({ Status: 'Done' }) });
 check('update requires a session', r.status === 401);
+
+console.log('\n== never lose a note ==');
+rejectStatusWrites = true;
+captured = [];
+const resilient = { ...params, Body: 'Survives a renamed status' };
+r = await call('/sms', { method: 'POST', headers: { 'X-Twilio-Signature': await twilioSig(url, resilient) },
+                          body: new URLSearchParams(resilient) });
+check('Airtable rejecting Status does not lose the note', r.status === 200, 'status ' + r.status);
+check('retried without Status', captured.length === 2 && !JSON.parse(captured[1].body).fields.Status);
+check('message still saved on the retry',
+      JSON.parse(captured[1].body).fields.Message === 'Survives a renamed status');
+rejectStatusWrites = false;
 
 console.log('\n== fails closed ==');
 const noCode = { ...env, BOARD_ACCESS_CODE: undefined };

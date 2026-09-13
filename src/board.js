@@ -9,6 +9,8 @@
  * and builds the DOM with createElement + textContent, so note text coming
  * from SMS can never be interpreted as markup.
  */
+import { STATUSES, INBOX_STATUS } from './config.js';
+
 export const BOARD_HTML = `<!doctype html>
 <html lang="en" data-theme="dark">
 <head>
@@ -135,11 +137,12 @@ footer{margin-top:34px;color:var(--dim);font-size:12px;display:flex;gap:10px;fle
 <script>
 (function(){
   "use strict";
-  var COLUMNS = ["To Do","In Progress","Done"];
+  var COLUMNS = ${JSON.stringify(STATUSES)};
+  var INBOX = ${JSON.stringify(INBOX_STATUS)};
   var app = document.getElementById("app");
   var toastEl = document.getElementById("toast");
   var notes = [];
-  var active = "To Do";
+  var active = ${JSON.stringify(INBOX_STATUS)};
   var toastTimer;
 
   function toast(msg, bad){
@@ -254,7 +257,7 @@ footer{margin-top:34px;color:var(--dim);font-size:12px;display:flex;gap:10px;fle
       var list = el("div","cards");
       var inCol = notes.filter(function(n){ return n.status === c; });
       if (!inCol.length){
-        list.appendChild(el("div","empty", c === "To Do" ? "Nothing waiting. Text the number to add one." : "Nothing here."));
+        list.appendChild(el("div","empty", c === INBOX ? "Nothing waiting. Text the number to add one." : "Nothing here."));
       } else {
         inCol.forEach(function(n){ list.appendChild(cardFor(n)); });
       }

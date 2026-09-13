@@ -10,3 +10,10 @@ compatibility_date = "2026-09-01"
 # Optional override, only needed if signature validation fails because
 # Cloudflare sees a different URL than the one configured in Twilio:
 #   PUBLIC_URL
+
+# Persist logs so they can be searched after the fact, not just watched live.
+# Without this you only get the real-time stream, which shows nothing that
+# happened before you opened it.
+[observability]
+enabled = true
+head_sampling_rate = 1

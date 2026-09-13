@@ -1,0 +1,13 @@
+{
+  "name": "sms-notes-webhook",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Twilio SMS webhook that files incoming texts into an Airtable Kanban board",
+  "scripts": {
+    "dev": "wrangler dev",
+    "deploy": "wrangler deploy"
+  },
+  "devDependencies": {
+    "wrangler": "^4.0.0"
+  }
+}

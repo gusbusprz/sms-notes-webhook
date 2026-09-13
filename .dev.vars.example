@@ -1,0 +1,5 @@
+# Copy this to .dev.vars for local testing with: npm run dev
+# .dev.vars is gitignored. Never commit real values.
+AIRTABLE_TOKEN=
+AIRTABLE_BASE_ID=appju47gVBOPF0zHC
+TWILIO_AUTH_TOKEN=

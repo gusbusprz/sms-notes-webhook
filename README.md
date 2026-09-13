@@ -4,6 +4,36 @@ Text a number, the note lands in Airtable as a card in the "To Do" column.
 
 Twilio SMS -> Cloudflare Worker -> Airtable REST API -> Airtable Kanban board.
 
+## Routes
+
+| Route | Purpose |
+|---|---|
+| `POST /sms` | Twilio inbound webhook. Signature-verified. |
+| `GET /` | The board UI |
+| `GET /health` | Deploy health check |
+| `POST /api/auth` | Exchange the access code for a session cookie |
+| `GET /api/notes` | List notes (session required) |
+| `PATCH /api/notes/:id` | Update a note's Status or Message (session required) |
+
+## The board
+
+A dark, Harmony-branded Kanban served straight from the Worker, so the Airtable
+token never reaches the browser. Move cards between columns, edit note text in
+place. Narrow screens get column tabs instead of three columns.
+
+Access is a shared code held in the `BOARD_ACCESS_CODE` secret, exchanged for an
+HMAC-signed HttpOnly cookie good for 30 days. It **fails closed**: if the secret
+is unset, nobody gets in. This is a placeholder until harmonytechgroup.com domain
+authentication replaces it.
+
+## Tests
+
+    npm test
+
+Covers routing, the Twilio signature path (valid, forged, empty body, emoji),
+session issue and rejection, field allow-listing on updates, and fail-closed
+behaviour when no access code is configured.
+
 ## How it works
 
 Twilio POSTs a form-encoded body to this Worker when a text arrives. The Worker

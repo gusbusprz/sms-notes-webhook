@@ -43,15 +43,32 @@ export default {
     }
 
     const signature = request.headers.get('X-Twilio-Signature');
-    const valid = await validateTwilioSignature(
+    const urlUsed = env.PUBLIC_URL || request.url;
+    const check = await validateTwilioSignature(
       env.TWILIO_AUTH_TOKEN,
       signature,
-      env.PUBLIC_URL || request.url,
+      urlUsed,
       params
     );
 
-    if (!valid) {
-      console.warn('Rejected request with invalid Twilio signature');
+    if (!check.valid) {
+      // Diagnostic detail. None of this leaks the auth token: the HMAC output
+      // does not reveal its key, and we log only the token's LENGTH so a
+      // pasted Account SID (34 chars) can be told from an Auth Token (32).
+      console.warn(
+        'SIGNATURE_FAILED ' +
+          JSON.stringify({
+            urlUsed,
+            rawRequestUrl: request.url,
+            publicUrlOverrideSet: Boolean(env.PUBLIC_URL),
+            authTokenPresent: Boolean(env.TWILIO_AUTH_TOKEN),
+            authTokenLength: (env.TWILIO_AUTH_TOKEN || '').length,
+            signatureHeaderPresent: Boolean(signature),
+            receivedSignature: signature,
+            computedSignature: check.expected,
+            paramKeys: Object.keys(params).sort(),
+          })
+      );
       return new Response('Forbidden', { status: 403 });
     }
 
@@ -73,7 +90,7 @@ export default {
     } catch (err) {
       // Return 500 so the failure is visible in the Twilio debugger rather than
       // silently swallowed. Twilio does not retry inbound SMS webhooks.
-      console.error('Airtable write failed:', err.message);
+      console.error('AIRTABLE_FAILED ' + err.message);
       return new Response('Airtable write failed', { status: 500 });
     }
 
@@ -114,7 +131,9 @@ async function createAirtableRecord(env, fields) {
  * value to override it.
  */
 async function validateTwilioSignature(authToken, signature, url, params) {
-  if (!authToken || !signature) return false;
+  if (!authToken || !signature) {
+    return { valid: false, expected: null };
+  }
 
   let data = url;
   for (const key of Object.keys(params).sort()) {
@@ -133,7 +152,7 @@ async function validateTwilioSignature(authToken, signature, url, params) {
   const mac = await crypto.subtle.sign('HMAC', key, encoder.encode(data));
   const expected = btoa(String.fromCharCode(...new Uint8Array(mac)));
 
-  return timingSafeEqual(expected, signature);
+  return { valid: timingSafeEqual(expected, signature), expected };
 }
 
 /** Compare without leaking timing information about where a mismatch occurred. */
